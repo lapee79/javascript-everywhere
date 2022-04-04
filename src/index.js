@@ -1,14 +1,12 @@
-const { ApolloServer, gql } = require('apollo-server-express');
 const express = require('express');
+const { ApolloServer, gql } = require('apollo-server-express');
+require('dotenv').config();
 
-const app = express();
+const db = require('./db');
+const models = require('./models');
+
 const port = process.env.PORT || 4000;
-
-let notes = [
-    {id: '1', content: 'This is a note', author: 'Adam Scott'},
-    {id: '2', content: 'This is another note', author: 'Harlow Everly'},
-    {id: '3', content: 'Oh hey look, another note!', author: 'Riley Harrison'}
-];
+const DB_HOST = process.env.DB_HOST;
 
 // GraphQL schema language로 schema를 구성
 const typeDefs = gql`
@@ -23,18 +21,37 @@ const typeDefs = gql`
         notes: [Note]!
         note(id: ID!): Note!
     }
+
+    type Mutation {
+        newNote(content: String!): Note!
+    }
 `;
 
 // schema field를 위한 resolver function 제공
 const resolvers = {
     Query: {
         hello: () => 'Hello world!',
-        notes: () => notes,
-        note: (parent, args) => {
-            return notes.find(note => note.id === args.id);
+        notes: async () => {
+            return await models.Note.find();
+        },
+        note: async (parent, args) => {
+            return await models.Note.findById(args.id);
+        }
+    },
+    Mutation: {
+        newNote: async (parent, args) => {
+            return await models.Note.create({
+                content: args.content,
+                author: 'Adam Scott'
+            });
         }
     }
 };
+
+const app = express();
+
+// DB에 연결
+db.connect(DB_HOST);
 
 // Apollo server 설정
 const server = new ApolloServer({ typeDefs, resolvers });
