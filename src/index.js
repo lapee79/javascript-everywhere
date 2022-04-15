@@ -1,5 +1,6 @@
 const express = require('express');
 const { ApolloServer } = require('apollo-server-express');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 // import local modules
@@ -17,13 +18,32 @@ const app = express();
 // DB에 연결
 db.connect(DB_HOST);
 
+// JWT에서 user 정보 가져오기
+const getUser = token => {
+    if (token) {
+        try {
+            // token에서 얻은 user 정보 반환
+            return jwt.verify(token, process.env.JWT_SECRET);
+        } catch (err) {
+            // token에 문제가 있으면 error 던지기
+            throw new Error('Session invalid');
+        }
+    }
+};
+
 // Apollo server 설정
 const server = new ApolloServer({
     typeDefs,
     resolvers,
-    context: () => {
-        // context에 db models 추가
-        return { models };
+    context: ({req}) => {
+        // header에서 user token 가져오기
+        const token = req.headers.authorization;
+        // token에서 user 얻기
+        const user = getUser(token);
+        // console에 logging
+        console.log(user);
+        // context에 db models 및 user 추가
+        return {models, user};
     }
 });
 
