@@ -4,19 +4,39 @@ const {
     AuthenticationError,
     ForbiddenError
 } = require('apollo-server-express');
+const mongoose = require('mongoose');
 
 require('dotenv').config();
 
 const gravatar = require('../util/gravatar');
 
 module.exports = {
-    newNote: async (parent, args, { models }) => {
+    newNote: async (parent, args, { models, user }) => {
+        // context에 user가 없으면 인증 error 던지기
+        if (!user) {
+            throw new AuthenticationError('You must be signed in to create a note');
+        }
+
         return await models.Note.create({
             content: args.content,
-            author: 'Adam Scott'
+            // author의 mongo ID 참조
+            author: mongoose.Types.ObjectId(user.id)
         });
     },
-    updateNote: async (parent, { content, id }, { models }) => {
+    updateNote: async (parent, { content, id }, { models, user }) => {
+        // user가 아니면 인증 에러 던지기
+        if (!user) {
+            throw new AuthenticationError('You must be signed in to update a note');
+        }
+
+        // note 찾기
+        const note = await models.Note.findById(id);
+        // note 소유자와 현재 user가 불일치하면 접근 error 던지기
+        if (note && String(note.author) !== user.id) {
+            throw new ForbiddenError("You don't have permissions to update the note");
+        }
+
+        // DB의 note를 update하고 update된 note를 반환
         return await models.Note.findOneAndUpdate(
             {
                 _id: id,
@@ -31,9 +51,22 @@ module.exports = {
             }
         );
     },
-    deleteNote: async (parent, { id }, { models }) => {
+    deleteNote: async (parent, { id }, { models, user }) => {
+        // user가 아니면 인증 error 던지기
+        if (!user) {
+            throw new AuthenticationError('You must be signed in to delete a note');
+        }
+
+        // note 찾기
+        const note = await models.Note.findById(id);
+        // note owner와 현재 user가 불일치하면 접근 error 던지기
+        if (note && String(note.author) !== user.id) {
+            throw new ForbiddenError("You don't have permissions to delete the note");
+        }
+
         try {
-            await models.Note.findOneAndRemove({_id: id});
+            // 문제가 없으면 note 삭제
+            await note.remove();
             return true;
         } catch (err) {
             return false;
