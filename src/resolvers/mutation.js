@@ -9,6 +9,7 @@ const mongoose = require('mongoose');
 require('dotenv').config();
 
 const gravatar = require('../util/gravatar');
+const { mongo } = require('mongoose');
 
 module.exports = {
     newNote: async (parent, args, { models, user }) => {
@@ -118,5 +119,52 @@ module.exports = {
 
         // JWT 생성 및 반환
         return jwt.sign({id: user._id}, process.env.JWT_SECRET);
+    },
+    toggleFavorite: async (parent, {id}, {models, user}) => {
+        // 전달된 user context가 없으면 error 던지기
+        if (!user) {
+            throw new AuthenticationError();
+        }
+
+        // User가 note를 이미 즐겨찾기했는지 확인
+        let noteCheck = await models.Note.findById(id);
+        const hasUser = noteCheck.favoritedBy.indexOf(user.id);
+
+        // User가 목록에 있으면
+        // favoriteCount를 1 줄이고 목록에서 User 제거
+        if (hasUser >= 0) {
+            return await models.Note.findByIdAndUpdate(
+                id,
+                {
+                    $pull: {
+                        favoritedBy: mongoose.Types.ObjectId(user.id)
+                    },
+                    $inc: {
+                        favoriteCount: -1
+                    }
+                },
+                {
+                    // new를 true로 설정하여 update된 doc 반환
+                    new: true
+                }
+            );
+        } else {
+            // User가 목록에 없으면
+            // favoriteCount를 1 늘리고 사용자를 목록에 추가
+            return await models.Note.findByIdAndUpdate(
+                id,
+                {
+                    $push: {
+                        favoritedBy: mongoose.Types.ObjectId(user.id)
+                    },
+                    $inc: {
+                        favoriteCount: 1
+                    }
+                },
+                {
+                    new: true
+                }
+            );
+        }
     }
 };
